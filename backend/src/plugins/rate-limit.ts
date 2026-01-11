@@ -7,7 +7,9 @@ interface RateLimitOptions {
   window: number // Time window in seconds
 }
 
+// 1. Tambahkan { as: 'global' } pada derive
 export const rateLimitPlugin = new Elysia({ name: 'rate-limit' }).derive(
+  { as: 'global' },
   () => ({
     checkRateLimit: async (key: string, options: RateLimitOptions) => {
       const { max, window } = options
@@ -31,6 +33,9 @@ export const rateLimitPlugin = new Elysia({ name: 'rate-limit' }).derive(
         }
       } catch (error) {
         // If Redis fails, allow request (fail open)
+        if (error instanceof Error && error.message.includes('Too many requests')) {
+            throw error
+        }
         logger.warn('Rate limit check failed, allowing request', { error })
         return { current: 0, remaining: max, reset: window }
       }
@@ -38,10 +43,11 @@ export const rateLimitPlugin = new Elysia({ name: 'rate-limit' }).derive(
   })
 )
 
-// Global rate limit middleware
+// 2. Tambahkan { as: 'global' } pada onBeforeHandle agar middleware ini terbawa saat di-use di index.ts
 export const globalRateLimit = new Elysia({ name: 'global-rate-limit' })
   .use(rateLimitPlugin)
-  .onBeforeHandle(async ({ request, checkRateLimit }) => {
+  .onBeforeHandle({ as: 'global' }, async ({ request, checkRateLimit }) => {
+    // x-forwarded-for bisa mengembalikan string atau null, kita pastikan tipenya string
     const ip = request.headers.get('x-forwarded-for') || 'unknown'
 
     try {
@@ -50,7 +56,7 @@ export const globalRateLimit = new Elysia({ name: 'global-rate-limit' })
         window: 60, // per 60 seconds
       })
     } catch (error) {
-      // If rate limit exceeded, error will be thrown and caught by error handler
+      // Re-throw error agar ditangkap oleh Elysia error handler
       throw error
     }
   })
