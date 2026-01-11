@@ -1,10 +1,14 @@
 import { Elysia } from 'elysia'
 import { logger } from '@/libs/logger'
 
-export const errorHandler = new Elysia({ name: 'error-handler' })
-  .onError(({ code, error, set }) => {
-    logger.error(`[${code}] ${error.message}`, {
-      stack: error.stack,
+export const errorHandler = new Elysia({ name: 'error-handler' }).onError(
+  ({ code, error, set }) => {
+    // Safe error logging
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    const errorStack = error instanceof Error ? error.stack : undefined
+
+    logger.error(`[${code}] ${errorMessage}`, {
+      stack: errorStack,
     })
 
     switch (code) {
@@ -13,7 +17,7 @@ export const errorHandler = new Elysia({ name: 'error-handler' })
         return {
           success: false,
           error: 'Validation Error',
-          message: error.message,
+          message: errorMessage,
         }
 
       case 'NOT_FOUND':
@@ -21,7 +25,7 @@ export const errorHandler = new Elysia({ name: 'error-handler' })
         return {
           success: false,
           error: 'Not Found',
-          message: error.message,
+          message: errorMessage,
         }
 
       case 'PARSE':
@@ -46,7 +50,8 @@ export const errorHandler = new Elysia({ name: 'error-handler' })
         return {
           success: false,
           error: 'Server Error',
-          message: error.message,
+          message: errorMessage,
         }
     }
-  })
+  }
+)

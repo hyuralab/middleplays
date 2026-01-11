@@ -7,8 +7,8 @@ interface RateLimitOptions {
   window: number // Time window in seconds
 }
 
-export const rateLimitPlugin = new Elysia({ name: 'rate-limit' })
-  .derive(({ request, set }) => ({
+export const rateLimitPlugin = new Elysia({ name: 'rate-limit' }).derive(
+  () => ({
     checkRateLimit: async (key: string, options: RateLimitOptions) => {
       const { max, window } = options
       const redisKey = `ratelimit:${key}`
@@ -21,7 +21,6 @@ export const rateLimitPlugin = new Elysia({ name: 'rate-limit' })
         }
 
         if (current > max) {
-          set.status = 429
           throw new Error('Too many requests. Please try again later.')
         }
 
@@ -36,16 +35,22 @@ export const rateLimitPlugin = new Elysia({ name: 'rate-limit' })
         return { current: 0, remaining: max, reset: window }
       }
     },
-  }))
+  })
+)
 
 // Global rate limit middleware
 export const globalRateLimit = new Elysia({ name: 'global-rate-limit' })
   .use(rateLimitPlugin)
-  .onBeforeHandle(async ({ request, checkRateLimit, set }) => {
+  .onBeforeHandle(async ({ request, checkRateLimit }) => {
     const ip = request.headers.get('x-forwarded-for') || 'unknown'
-    
-    await checkRateLimit(`global:${ip}`, {
-      max: 100, // 100 requests
-      window: 60, // per 60 seconds
-    })
+
+    try {
+      await checkRateLimit(`global:${ip}`, {
+        max: 100, // 100 requests
+        window: 60, // per 60 seconds
+      })
+    } catch (error) {
+      // If rate limit exceeded, error will be thrown and caught by error handler
+      throw error
+    }
   })

@@ -1,4 +1,5 @@
 import { Elysia } from 'elysia'
+import { jwtPlugin } from '@/plugins/jwt'
 import type { JWTPayloadSpec } from '@elysiajs/jwt'
 
 interface JWTPayload extends JWTPayloadSpec {
@@ -7,6 +8,7 @@ interface JWTPayload extends JWTPayloadSpec {
 }
 
 export const authMiddleware = new Elysia({ name: 'auth' })
+  .use(jwtPlugin)  // ✅ ADD THIS - Import JWT plugin
   .derive(async ({ request, jwt }) => {
     const auth = request.headers.get('authorization')
 
@@ -17,7 +19,7 @@ export const authMiddleware = new Elysia({ name: 'auth' })
     const token = auth.slice(7)
 
     try {
-      const payload = await jwt.verify(token) as JWTPayload | false
+      const payload = (await jwt.verify(token)) as JWTPayload | false
 
       if (!payload || payload.type !== 'access') {
         return { user: null, userId: null }
