@@ -4,7 +4,7 @@
     "module": "ESNext",
     "moduleResolution": "bundler",
     "lib": ["ESNext"],
-    "types": ["bun-types"],
+    "types": ["bun-types", "@types/node"],
     
     // Strict type checking
     "strict": true,
@@ -12,12 +12,11 @@
     "noImplicitOverride": true,
     
     // Path aliases
-    "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"],
       "@/db": ["./src/db"],
       "@/modules/*": ["./src/modules/*"],
-      "@/lib/*": ["./src/lib/*"],
+      "@/libs/*": ["./src/libs/*"],
       "@/types": ["./src/types"]
     },
     
@@ -29,6 +28,6 @@
     "isolatedModules": true,
     "allowSyntheticDefaultImports": true
   },
-  "include": ["src/**/*", "test/**/*"],
+  "include": ["src/**/*", "test/**/*", "drizzle.config.ts"],
   "exclude": ["node_modules"]
 }

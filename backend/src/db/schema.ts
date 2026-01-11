@@ -1,6 +1,5 @@
-// src/db/schema.ts
-import { pgTable, uuid, varchar, text, timestamp, boolean, decimal, integer, jsonb, pgEnum, index, serial } from 'drizzle-orm/pg-core'
-import { relations } from 'drizzle-orm'
+import { pgTable, uuid, varchar, text, timestamp, boolean, decimal, integer, jsonb, pgEnum, index, serial, primaryKey } from 'drizzle-orm/pg-core'
+import { relations, sql } from 'drizzle-orm'
 import { createInsertSchema, createSelectSchema } from 'drizzle-typebox'
 import { Type as t } from '@sinclair/typebox'
 
