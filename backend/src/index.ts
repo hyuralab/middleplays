@@ -14,8 +14,8 @@ import { db, closeDatabase, checkDbConnection } from '@/db'
 import { redis } from '@/libs/redis'
 import { logger } from '@/libs/logger'
 
-// Modules (will be implemented later)
-// import { authModule } from '@/modules/auth'
+// Modules
+import { authModule } from '@/modules/auth'
 // import { usersModule } from '@/modules/users'
 // import { gamesModule } from '@/modules/games'
 // import { postingsModule } from '@/modules/postings'
@@ -63,8 +63,8 @@ const app = new Elysia()
     docs: '/health',
   }))
 
-  // Mount modules (commented out until implemented)
-  // .use(authModule)
+  // Mount modules
+  .use(authModule)
   // .use(usersModule)
   // .use(gamesModule)
   // .use(postingsModule)
