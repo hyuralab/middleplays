@@ -16,11 +16,15 @@ export const rateLimitPlugin = new Elysia({ name: 'rate-limit' }).derive(
       const redisKey = `ratelimit:${key}`
 
       try {
-        const current = await redis.incr(redisKey)
-
-        if (current === 1) {
-          await redis.expire(redisKey, window)
-        }
+        // Use Lua script for atomic operation (fix race condition)
+        const script = `
+          local current = redis.call('INCR', KEYS[1])
+          if current == 1 then
+            redis.call('EXPIRE', KEYS[1], ARGV[1])
+          end
+          return current
+        `
+        const current = await redis.eval(script, 1, redisKey, window.toString()) as number
 
         if (current > max) {
           throw new Error('Too many requests. Please try again later.')

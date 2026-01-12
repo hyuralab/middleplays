@@ -1,58 +1,77 @@
 import { db } from './index'
 import { games, gameFieldDefinitions } from './schema'
 import { logger } from '@/libs/logger'
+import { inArray } from 'drizzle-orm'
 
 async function seed() {
   logger.info('Starting database seed...')
 
   try {
-    // Insert games
-    const gamesData = await db
-      .insert(games)
-      .values([
-        {
-          name: 'Mobile Legends',
-          slug: 'mobile-legends',
-          description: 'Popular MOBA game for mobile',
-          isActive: true,
-        },
-        {
-          name: 'Free Fire',
-          slug: 'free-fire',
-          description: 'Battle royale game',
-          isActive: true,
-        },
-        {
-          name: 'PUBG Mobile',
-          slug: 'pubg-mobile',
-          description: 'Battle royale game',
-          isActive: true,
-        },
-        {
-          name: 'Roblox',
-          slug: 'roblox',
-          description: 'Online game platform and game creation system',
-          isActive: true,
-        },
-        {
-          name: 'eFootball',
-          slug: 'efootball',
-          description: 'Football simulation game',
-          isActive: true,
-        },
-      ])
-      .returning()
+    // Get existing games first (handle duplicate seed runs)
+    const gameSlugs = ['mobile-legends', 'free-fire', 'pubg-mobile', 'roblox', 'efootball']
+    const existingGames = await db.query.games.findMany({
+      where: inArray(games.slug, gameSlugs),
+    })
 
-    logger.success(`Inserted ${gamesData.length} games`)
+    const existingSlugs = new Set(existingGames.map(g => g.slug))
+    const gamesToInsert = [
+      {
+        name: 'Mobile Legends',
+        slug: 'mobile-legends',
+        description: 'Popular MOBA game for mobile',
+        isActive: true,
+      },
+      {
+        name: 'Free Fire',
+        slug: 'free-fire',
+        description: 'Battle royale game',
+        isActive: true,
+      },
+      {
+        name: 'PUBG Mobile',
+        slug: 'pubg-mobile',
+        description: 'Battle royale game',
+        isActive: true,
+      },
+      {
+        name: 'Roblox',
+        slug: 'roblox',
+        description: 'Online game platform and game creation system',
+        isActive: true,
+      },
+      {
+        name: 'eFootball',
+        slug: 'efootball',
+        description: 'Football simulation game',
+        isActive: true,
+      },
+    ].filter(game => !existingSlugs.has(game.slug))
 
-    // Get game IDs
-    const mlGame = gamesData.find((g) => g.slug === 'mobile-legends')!
-    const ffGame = gamesData.find((g) => g.slug === 'free-fire')!
-    const pubgGame = gamesData.find((g) => g.slug === 'pubg-mobile')!
-    const robloxGame = gamesData.find((g) => g.slug === 'roblox')!
-    const efootballGame = gamesData.find((g) => g.slug === 'efootball')!
+    // Insert only new games (skip duplicates)
+    let gamesData = [...existingGames]
+    if (gamesToInsert.length > 0) {
+      const insertedGames = await db
+        .insert(games)
+        .values(gamesToInsert)
+        .returning()
+      gamesData = [...gamesData, ...insertedGames]
+      logger.success(`Inserted ${insertedGames.length} new games`)
+    } else {
+      logger.info('All games already exist, skipping insert')
+    }
 
-    // Insert field definitions
+    // Get game IDs with proper error handling
+    const mlGame = gamesData.find((g) => g.slug === 'mobile-legends')
+    const ffGame = gamesData.find((g) => g.slug === 'free-fire')
+    const pubgGame = gamesData.find((g) => g.slug === 'pubg-mobile')
+    const robloxGame = gamesData.find((g) => g.slug === 'roblox')
+    const efootballGame = gamesData.find((g) => g.slug === 'efootball')
+
+    if (!mlGame || !ffGame || !pubgGame || !robloxGame || !efootballGame) {
+      throw new Error('Failed to find all required games after insert')
+    }
+
+    // Insert field definitions (TODO: add duplicate handling for field definitions too)
     const fieldDefinitionsData = await db
       .insert(gameFieldDefinitions)
       .values([

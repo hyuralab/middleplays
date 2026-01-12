@@ -16,6 +16,10 @@ function deriveKey(secret: string, salt: string): Buffer {
  * Returns format: iv:authTag:encrypted
  */
 export async function encryptCredentials(plaintext: string): Promise<string> {
+  if (!plaintext || typeof plaintext !== 'string' || plaintext.trim().length === 0) {
+    throw new Error('Plaintext cannot be empty')
+  }
+  
   const iv = randomBytes(IV_LENGTH)
   const key = deriveKey(env.CREDENTIAL_ENCRYPTION_KEY, env.CREDENTIAL_ENCRYPTION_SALT)
   
@@ -31,6 +35,13 @@ export async function encryptCredentials(plaintext: string): Promise<string> {
 }
 
 /**
+ * Validate hex string
+ */
+function isValidHex(str: string): boolean {
+  return /^[0-9a-f]+$/i.test(str)
+}
+
+/**
  * Decrypt credentials
  */
 export async function decryptCredentials(encryptedData: string): Promise<string> {
@@ -43,6 +54,11 @@ export async function decryptCredentials(encryptedData: string): Promise<string>
   const ivHex = parts[0]!
   const authTagHex = parts[1]!
   const encrypted = parts[2]!
+  
+  // Validate hex format
+  if (!isValidHex(ivHex) || !isValidHex(authTagHex) || !isValidHex(encrypted)) {
+    throw new Error('Invalid hex format in encrypted data')
+  }
   
   const iv = Buffer.from(ivHex, 'hex')
   const authTag = Buffer.from(authTagHex, 'hex')

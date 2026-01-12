@@ -58,10 +58,11 @@ export function validateEnv() {
     )
   }
   
-  console.log('✅ Environment variables validated')
+  // Use logger if available, otherwise console.log
+  if (typeof process !== 'undefined' && process.env.NODE_ENV !== 'test') {
+    console.log('✅ Environment variables validated')
+  }
 }
 
-// Auto-validate on import (in production)
-if (env.NODE_ENV === 'production') {
-  validateEnv()
-}
+// Auto-validate on import (all environments)
+validateEnv()

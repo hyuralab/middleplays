@@ -1,6 +1,7 @@
 import { drizzle } from 'drizzle-orm/postgres-js'
 import postgres from 'postgres'
 import * as schema from './schema'
+import { logger } from '@/libs/logger'
 
 const connectionString = process.env.DATABASE_URL!
 
@@ -22,8 +23,25 @@ export const migrationClient = postgres(connectionString, {
     max: 1
 })
 
-// Graceful shutdown
-process.on('SIGINT', async () => {
-    await queryClient.end()
-    process.exit(0)
-})
+// Helper function to check database connection
+export async function checkDbConnection(): Promise<boolean> {
+  try {
+    await queryClient`SELECT 1`
+    return true
+  } catch {
+    return false
+  }
+}
+
+// Transaction helper
+export async function withTransaction<T>(
+  callback: (tx: typeof db) => Promise<T>
+): Promise<T> {
+  return await db.transaction(callback)
+}
+
+// Graceful shutdown helper (consolidated shutdown handler)
+export async function closeDatabase() {
+  await queryClient.end()
+  await migrationClient.end()
+}
