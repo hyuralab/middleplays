@@ -71,10 +71,17 @@ async function seed() {
       throw new Error('Failed to find all required games after insert')
     }
 
-    // Insert field definitions (TODO: add duplicate handling for field definitions too)
-    const fieldDefinitionsData = await db
-      .insert(gameFieldDefinitions)
-      .values([
+    // Check existing field definitions to avoid duplicates
+    const gameIds = [mlGame.id, ffGame.id, pubgGame.id, robloxGame.id, efootballGame.id]
+    const existingFields = await db.query.gameFieldDefinitions.findMany({
+      where: inArray(gameFieldDefinitions.gameId, gameIds),
+    })
+
+    const existingFieldKeys = new Set(
+      existingFields.map(f => `${f.gameId}-${f.fieldName}`)
+    )
+
+    const fieldDefinitionsToInsert = [
         // Mobile Legends fields
         {
           gameId: mlGame.id,
@@ -223,10 +230,21 @@ async function seed() {
           isRequired: false,
           displayOrder: 3,
         },
-      ])
-      .returning()
+      ].filter(field => !existingFieldKeys.has(`${field.gameId}-${field.fieldName}`))
 
-    logger.success(`Inserted ${fieldDefinitionsData.length} field definitions`)
+    // Insert only new field definitions (skip duplicates)
+    let fieldDefinitionsData = [...existingFields]
+    if (fieldDefinitionsToInsert.length > 0) {
+      const insertedFields = await db
+        .insert(gameFieldDefinitions)
+        .values(fieldDefinitionsToInsert)
+        .returning()
+      fieldDefinitionsData = [...fieldDefinitionsData, ...insertedFields]
+      logger.success(`Inserted ${insertedFields.length} new field definitions`)
+    } else {
+      logger.info('All field definitions already exist, skipping insert')
+    }
+
     logger.success('✅ Database seed completed!')
   } catch (error) {
     logger.error('Seed failed', error)

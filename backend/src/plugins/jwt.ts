@@ -17,10 +17,10 @@ export const jwtPlugin = new Elysia({ name: 'jwt' })
       exp: env.JWT_REFRESH_EXPIRES,
     })
   )
-  .derive(({ jwt }) => ({
+  .derive(({ jwt, jwtRefresh }) => ({
     generateTokens: async (userId: string) => {
       const accessToken = await jwt.sign({ userId, type: 'access' })
-      const refreshToken = await jwt.sign({ userId, type: 'refresh' })
+      const refreshToken = await jwtRefresh.sign({ userId, type: 'refresh' })
       
       return { accessToken, refreshToken }
     },
