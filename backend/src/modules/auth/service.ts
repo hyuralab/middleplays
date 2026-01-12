@@ -26,40 +26,64 @@ export async function registerUser(data: RegisterRequest) {
   // Hash password
   const passwordHash = await hashPassword(data.password)
 
-  // Create user and profile in transaction
-  const result = await db.transaction(async (tx) => {
-    // Insert user
-    const [newUser] = await tx
-      .insert(users)
-      .values({
-        email: normalizedEmail,
-        passwordHash,
-        role: 'user',
-        isEmailVerified: false,
-      })
-      .returning()
+  // ✅ FIXED: Proper transaction error handling
+  try {
+    const result = await db.transaction(async (tx) => {
+      // Insert user
+      const [newUser] = await tx
+        .insert(users)
+        .values({
+          email: normalizedEmail,
+          passwordHash,
+          role: 'user',
+          isEmailVerified: false,
+        })
+        .returning()
 
-    // Create user profile
-    await tx.insert(userProfiles).values({
-      userId: newUser.id,
-      fullName: data.fullName || null,
-      phone: data.phone || null,
-      balance: '0',
-      totalSales: 0,
-      totalPurchases: 0,
-      rating: '0',
+      if (!newUser) {
+        throw new Error('Failed to create user')
+      }
+
+      // Create user profile
+      const [profile] = await tx
+        .insert(userProfiles)
+        .values({
+          userId: newUser.id,
+          fullName: data.fullName || null,
+          phone: data.phone || null,
+          balance: '0',
+          totalSales: 0,
+          totalPurchases: 0,
+          rating: '0',
+        })
+        .returning()
+
+      if (!profile) {
+        throw new Error('Failed to create user profile')
+      }
+
+      return newUser
     })
 
-    return newUser
-  })
+    logger.info(`User registered: ${result.email}`)
 
-  logger.info(`User registered: ${result.email}`)
-
-  return {
-    id: result.id,
-    email: result.email,
-    role: result.role,
-    isEmailVerified: result.isEmailVerified,
+    return {
+      id: result.id,
+      email: result.email,
+      role: result.role,
+      isEmailVerified: result.isEmailVerified,
+    }
+  } catch (error) {
+    // ✅ Handle PostgreSQL unique constraint violation
+    if (error instanceof Error) {
+      if (error.message.includes('unique constraint') || 
+          error.message.includes('duplicate key')) {
+        throw new Error('Email already registered')
+      }
+    }
+    
+    logger.error('Registration failed', error)
+    throw new Error('Registration failed. Please try again.')
   }
 }
 
@@ -137,7 +161,6 @@ export async function verifyRefreshToken(
  */
 export async function verifyEmail(token: string) {
   // TODO: Implement email verification logic
-  // For now, just return success message
   logger.info('Email verification requested', { token })
   throw new Error('Email verification not yet implemented')
 }

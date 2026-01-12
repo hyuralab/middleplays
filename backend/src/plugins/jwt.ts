@@ -13,7 +13,7 @@ export const jwtPlugin = new Elysia({ name: 'jwt' })
   .use(
     jwt({
       name: 'jwtRefresh',
-      secret: env.JWT_SECRET,
+      secret: env.JWT_REFRESH_SECRET,
       exp: env.JWT_REFRESH_EXPIRES,
     })
   )

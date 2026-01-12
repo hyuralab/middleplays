@@ -11,7 +11,8 @@ export const registerRequestSchema = Type.Object({
   password: Type.String({
     minLength: 8,
     maxLength: 100,
-    pattern: '^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d).*$',
+    // ✅ FIXED: Now enforces 8+ chars AND uppercase, lowercase, number
+    pattern: '^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d).{8,}$',
     errorMessage: 'Password must be at least 8 characters with uppercase, lowercase, and number',
   }),
   fullName: Type.Optional(Type.String({

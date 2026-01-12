@@ -1,3 +1,4 @@
+// src/types/env.d.ts
 declare module 'bun' {
   interface Env {
     // App
@@ -16,6 +17,7 @@ declare module 'bun' {
     
     // JWT
     JWT_SECRET: string
+    JWT_REFRESH_SECRET: string // ✅ NEW
     JWT_ACCESS_EXPIRES: string
     JWT_REFRESH_EXPIRES: string
     
