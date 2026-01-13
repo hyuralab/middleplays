@@ -14,12 +14,16 @@ import { db, closeDatabase, checkDbConnection } from '@/db'
 import { redis } from '@/libs/redis'
 import { logger } from '@/libs/logger'
 
+// Jobs & Workers (optional, can be disabled)
+let autoExpireWorker: any, autoCompleteWorker: any, disbursementWorker: any, notificationWorker: any
+
 // Modules
 import { authModule } from '@/modules/auth'
-// import { usersModule } from '@/modules/users'
-// import { gamesModule } from '@/modules/games'
-// import { postingsModule } from '@/modules/postings'
-// import { transactionsModule } from '@/modules/transactions'
+import { usersModule } from '@/modules/users'
+import { gamesModule } from '@/modules/games'
+import { postingsModule } from '@/modules/postings'
+import { transactionsModule } from '@/modules/transactions'
+import { reviewsModule } from '@/modules/reviews'
 
 // Validate environment on startup
 validateEnv()
@@ -63,12 +67,38 @@ const app = new Elysia()
     docs: '/health',
   }))
 
+  // Static file serving for uploads
+  .get('/uploads/images/:filename', async ({ params }) => {
+    const { readFile } = await import('fs/promises')
+    const { join } = await import('path')
+    
+    try {
+      // Validate filename to prevent directory traversal
+      if (params.filename.includes('..') || params.filename.includes('/')) {
+        throw new Error('Invalid filename')
+      }
+      
+      const filepath = join(process.cwd(), 'public', 'uploads', 'images', params.filename)
+      const file = await readFile(filepath)
+      
+      return new Response(file, {
+        headers: {
+          'Content-Type': 'image/webp',
+          'Cache-Control': 'public, max-age=31536000', // 1 year cache for versioned URLs
+        },
+      })
+    } catch (error) {
+      return new Response('File not found', { status: 404 })
+    }
+  })
+
   // Mount modules
   .use(authModule)
-  // .use(usersModule)
-  // .use(gamesModule)
-  // .use(postingsModule)
-  // .use(transactionsModule)
+  .use(usersModule)
+  .use(gamesModule)
+  .use(postingsModule)
+  .use(transactionsModule)
+  .use(reviewsModule)
 
   .listen(env.PORT)
 
@@ -80,7 +110,20 @@ logger.info(`Database: Connected`)
 // Connect Redis with proper error handling
 redis
   .connect()
-  .then(() => logger.success('Redis: Connected'))
+  .then(() => {
+    logger.success('Redis: Connected')
+    // Lazy load BullMQ workers only if Redis is ready
+    try {
+      const { autoExpireWorker: aew, autoCompleteWorker: acw, disbursementWorker: dw, notificationWorker: nw } = require('@/jobs/workers')
+      autoExpireWorker = aew
+      autoCompleteWorker = acw
+      disbursementWorker = dw
+      notificationWorker = nw
+      logger.success('BullMQ workers: Initialized')
+    } catch (error) {
+      logger.warn('BullMQ workers failed to initialize', error)
+    }
+  })
   .catch((err) => {
     logger.error('Redis connection failed', err)
     // In production, you might want to exit if Redis is critical
@@ -94,6 +137,13 @@ async function gracefulShutdown(signal: string) {
   logger.info(`${signal} received, closing server...`)
   
   try {
+    // Close BullMQ workers if initialized
+    if (autoExpireWorker || autoCompleteWorker || disbursementWorker || notificationWorker) {
+      const workers = [autoExpireWorker, autoCompleteWorker, disbursementWorker, notificationWorker].filter(Boolean)
+      await Promise.all(workers.map((w) => w?.close?.()))
+      logger.success('BullMQ workers closed')
+    }
+    
     // Close Redis connection
     await redis.quit()
     logger.success('Redis connection closed')
@@ -113,3 +163,7 @@ process.on('SIGTERM', () => gracefulShutdown('SIGTERM'))
 process.on('SIGINT', () => gracefulShutdown('SIGINT'))
 
 export type App = typeof app
+
+export function createApp() {
+  return app
+}

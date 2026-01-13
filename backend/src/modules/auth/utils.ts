@@ -1,33 +1,14 @@
-import { randomBytes } from 'crypto'
 import { db } from '@/db'
-import { users } from '@/db/schema'
-import { eq } from 'drizzle-orm'
 import { logger } from '@/libs/logger'
-
-/**
- * Validate email format
- */
-export function isValidEmail(email: string): boolean {
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-  return emailRegex.test(email)
-}
-
-/**
- * Generate email verification token
- */
-export function generateEmailVerificationToken(): string {
-  return randomBytes(32).toString('hex')
-}
+import { generateTokenWithHash } from '@/libs/crypto'
 
 /**
  * Check if email already exists
  */
 export async function emailExists(email: string): Promise<boolean> {
   try {
-    const existingUser = await db.query.users.findFirst({
-      where: eq(users.email, email.toLowerCase().trim()),
-    })
-    return !!existingUser
+    const result = await db`SELECT 1 FROM users WHERE email = ${email.toLowerCase().trim()} LIMIT 1`
+    return result.length > 0
   } catch (error) {
     logger.error('Error checking email existence', error)
     throw error
@@ -42,32 +23,27 @@ export function normalizeEmail(email: string): string {
 }
 
 /**
- * Validate password strength
+ * Creates a new email verification token for a user, invalidating any old ones.
+ * @returns The raw token to be sent to the user.
  */
-export function isPasswordStrong(password: string): {
-  valid: boolean
-  errors: string[]
-} {
-  const errors: string[] = []
+export async function createEmailVerificationToken(userId: string): Promise<string> {
+  try {
+    const { token, hash } = await generateTokenWithHash();
 
-  if (password.length < 8) {
-    errors.push('Password must be at least 8 characters')
-  }
+    // Token expires in 1 hour
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
 
-  if (!/[a-z]/.test(password)) {
-    errors.push('Password must contain at least one lowercase letter')
-  }
+    // Delete old token and insert new one
+    await db`DELETE FROM email_verification_tokens WHERE user_id = ${userId}`
+    await db`INSERT INTO email_verification_tokens (user_id, token, expires_at) 
+             VALUES (${userId}, ${hash}, ${expiresAt})`
+    
+    logger.info(`Generated email verification token for user ${userId}`);
 
-  if (!/[A-Z]/.test(password)) {
-    errors.push('Password must contain at least one uppercase letter')
-  }
-
-  if (!/\d/.test(password)) {
-    errors.push('Password must contain at least one number')
-  }
-
-  return {
-    valid: errors.length === 0,
-    errors,
+    return token;
+  } catch (error) {
+    logger.error(`Failed to create email verification token for user ${userId}`, error);
+    // Rethrow a generic error to not leak implementation details
+    throw new Error('Failed to generate email verification token.');
   }
 }

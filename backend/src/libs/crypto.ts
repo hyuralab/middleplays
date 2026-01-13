@@ -1,4 +1,4 @@
-import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from 'crypto'
+import { createCipheriv, createDecipheriv, randomBytes, scryptSync, createHash } from 'crypto'
 import { env } from '@/configs/env'
 
 const ALGORITHM = 'aes-256-gcm'
@@ -71,6 +71,25 @@ export async function decryptCredentials(encryptedData: string): Promise<string>
   decrypted += decipher.final('utf8')
   
   return decrypted
+}
+
+/**
+ * Hashes a token using SHA256. Used for storing tokens in the DB.
+ */
+export function hashToken(token: string): string {
+  return createHash('sha256').update(token).digest('hex');
+}
+
+/**
+ * Generate a secure token and its hash.
+ * Returns the raw token (for the user) and the hashed token (for the DB).
+ */
+export async function generateTokenWithHash(
+  tokenLength = 32
+): Promise<{ token: string; hash: string }> {
+  const token = randomBytes(tokenLength).toString('hex')
+  const hash = hashToken(token)
+  return { token, hash }
 }
 
 /**

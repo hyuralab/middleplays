@@ -2,6 +2,41 @@ import { env, validateEnv } from '../src/configs/env'
 import { redis } from '../src/libs/redis'
 import { logger } from '../src/libs/logger'
 import { encryptCredentials, decryptCredentials, hashPassword, verifyPassword } from '../src/libs/crypto'
+import { createApp } from '../src/index'
+import { db } from '../src/db'
+
+let app: any = null
+
+export function getApp() {
+  if (!app) {
+    app = createApp()
+  }
+  return app
+}
+
+export async function clearRateLimits() {
+  try {
+    // Get all keys matching rate-limit pattern and delete them
+    const keys = await redis.keys('ratelimit:*')
+    if (keys.length > 0) {
+      await redis.del(...keys)
+    }
+  } catch (error) {
+    logger.warn('Failed to clear rate limits', error)
+  }
+}
+
+export async function clearDatabase() {
+  try {
+    // Truncate all tables in correct order (respecting foreign keys)
+    await db`TRUNCATE TABLE review_responses, review_photos, reviews, favorites, notifications CASCADE`
+    await db`TRUNCATE TABLE disputes, transactions CASCADE`
+    await db`TRUNCATE TABLE game_accounts, game_field_definitions, games CASCADE`
+    await db`TRUNCATE TABLE seller_stats, email_verification_tokens, user_profiles, users CASCADE`
+  } catch (error) {
+    logger.warn('Failed to clear database', error)
+  }
+}
 
 async function testSetup() {
   logger.info('Testing setup...')
@@ -17,7 +52,6 @@ async function testSetup() {
   
   // Test 2: Redis connection
   try {
-    await redis.connect()
     await redis.ping()
     logger.success('Redis connection successful')
   } catch (error) {
@@ -54,8 +88,7 @@ async function testSetup() {
     logger.error('Password hashing test failed', error)
   }
   
-  await redis.quit()
-  logger.success('All tests passed! 🎉')
+  logger.success('Test setup complete! 🎉')
 }
 
-testSetup()
+testSetup().catch(console.error)

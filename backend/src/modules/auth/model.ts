@@ -44,6 +44,7 @@ export const refreshTokenRequestSchema = Type.Object({
 export const verifyEmailRequestSchema = Type.Object({
   token: Type.String({
     minLength: 1,
+    description: 'The email verification token from the link.',
   }),
 })
 
