@@ -1,9 +1,6 @@
 import { db } from '@/db'
-import { LoginMethod, UserRole } from '@/types'
-import { hashPassword, verifyPassword, hashToken } from '@/libs/crypto'
 import { logger } from '@/libs/logger'
-import type { RegisterRequest, LoginRequest } from './model'
-import { emailExists, normalizeEmail, createEmailVerificationToken } from './utils'
+import { verifyGoogleToken, type VerifiedGoogleUser } from '@/libs/google'
 import type { JWTPayloadSpec } from '@elysiajs/jwt'
 
 interface JWTPayload extends JWTPayloadSpec {
@@ -12,41 +9,76 @@ interface JWTPayload extends JWTPayloadSpec {
 }
 
 /**
- * Register new user
+ * Google OAuth login - auto-create user if not exists
  */
-export async function registerUser(data: RegisterRequest) {
-  const normalizedEmail = normalizeEmail(data.email)
-
-  // Check if email already exists
-  if (await emailExists(normalizedEmail)) {
-    throw new Error('Email already registered')
-  }
-
-  // Hash password
-  const passwordHash = await hashPassword(data.password)
-
+export async function googleLoginUser(googleToken: string) {
   try {
+    // Verify and extract Google user data
+    const googleUser = await verifyGoogleToken(googleToken)
+
+    // Try to find existing user by google_id
+    let user: any = null
+    const existingUsers = await db`
+      SELECT id, email, role, google_id, google_name, google_avatar_url
+      FROM users
+      WHERE google_id = ${googleUser.googleId}
+    `
+
+    if (existingUsers && existingUsers.length > 0) {
+      // User exists, just return
+      user = existingUsers[0]
+      logger.info(`Google user logged in: ${user.email}`)
+      return {
+        id: user.id,
+        email: user.email,
+        role: user.role,
+        googleId: user.google_id,
+        name: user.google_name,
+        avatarUrl: user.google_avatar_url,
+      }
+    }
+
+    // User doesn't exist, create new one
     const result = await db.begin(async (tx: any) => {
-      // Insert user
+      // Extract username from email
+      const username = googleUser.email.split('@')[0]
+
+      // Insert new user with Google info
       const users = await tx`
-        INSERT INTO users (username, email, password_hash, role, is_verified, login_method)
-        VALUES (${normalizedEmail.split('@')[0]}, ${normalizedEmail}, ${passwordHash}, 'user', false, 'email')
-        RETURNING id, email, role, is_verified
+        INSERT INTO users (
+          username, 
+          email, 
+          google_id, 
+          google_name, 
+          google_avatar_url, 
+          role, 
+          login_method
+        )
+        VALUES (
+          ${username},
+          ${googleUser.email},
+          ${googleUser.googleId},
+          ${googleUser.name},
+          ${googleUser.avatarUrl || null},
+          'user',
+          'google'
+        )
+        RETURNING id, email, role, google_id, google_name, google_avatar_url
       `
-      
+
       if (!users || users.length === 0) {
         throw new Error('Failed to create user')
       }
 
       const newUser = users[0]
 
-      // Create user profile
+      // Create user profile with name from Google
       await tx`
-        INSERT INTO user_profiles (user_id, full_name, phone)
-        VALUES (${newUser.id}, ${data.fullName || null}, ${data.phone || null})
+        INSERT INTO user_profiles (user_id, full_name)
+        VALUES (${newUser.id}, ${googleUser.name || null})
       `
 
-      // Create seller_stats (even if user, for consistency)
+      // Create seller_stats (for consistency)
       await tx`
         INSERT INTO seller_stats (user_id, trust_level)
         VALUES (${newUser.id}, 'new')
@@ -55,76 +87,23 @@ export async function registerUser(data: RegisterRequest) {
       return newUser
     })
 
-    logger.info(`User registered: ${result.email}`)
-
-    // Generate and "send" verification email (mock)
-    try {
-      const verificationToken = await createEmailVerificationToken(result.id)
-      // In a real app, you'd send an email via a job queue (e.g., BullMQ)
-      // For this project, we'll log it for demonstration purposes.
-      logger.info(`
-      ================================================
-      VIRTUAL EMAIL - PLEASE VERIFY YOUR EMAIL
-      ------------------------------------------------
-      To: ${result.email}
-      Verification Token: ${verificationToken}
-      (This would typically be a link in an email)
-      ================================================
-    `)
-    } catch (emailError) {
-      logger.error(`Failed to send verification email for ${result.email}`, emailError)
-      // We don't block the registration process if email sending fails.
-      // The user can request a new verification email later.
-    }
+    logger.info(`New Google user created and logged in: ${result.email}`)
 
     return {
       id: result.id,
       email: result.email,
       role: result.role,
-      isEmailVerified: result.is_verified,
+      googleId: result.google_id,
+      name: result.google_name,
+      avatarUrl: result.google_avatar_url,
     }
   } catch (error) {
-    // ✅ Handle PostgreSQL unique constraint violation
-    if (error instanceof Error) {
-      if (error.message.includes('unique constraint') || 
-          error.message.includes('duplicate key')) {
-        throw new Error('Email already registered')
-      }
+    logger.error('Google login failed', error)
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    if (errorMessage.includes('Invalid') || errorMessage.includes('expired')) {
+      throw new Error('Invalid Google token')
     }
-    
-    logger.error('Registration failed', error)
-    throw new Error('Registration failed. Please try again.')
-  }
-}
-
-/**
- * Login user
- */
-export async function loginUser(data: LoginRequest) {
-  const normalizedEmail = normalizeEmail(data.email)
-
-  // Find user by email
-  const users = await db`SELECT id, email, password_hash, role, is_verified FROM users WHERE email = ${normalizedEmail}`
-
-  if (!users || users.length === 0) {
-    throw new Error('Invalid email or password')
-  }
-
-  const user = users[0] as any
-
-  // Verify password
-  const isValid = await verifyPassword(data.password, user.password_hash)
-  if (!isValid) {
-    throw new Error('Invalid email or password')
-  }
-
-  logger.info(`User logged in: ${user.email}`)
-
-  return {
-    id: user.id,
-    email: user.email,
-    role: user.role,
-    isEmailVerified: user.is_verified,
+    throw new Error('Google login failed')
   }
 }
 
@@ -143,7 +122,7 @@ export async function verifyRefreshToken(
     }
 
     // Verify user still exists
-    const users = await db`SELECT id, email, role, is_verified FROM users WHERE id = ${payload.userId}`
+    const users = await db`SELECT id, email, role FROM users WHERE id = ${payload.userId}`
 
     if (!users || users.length === 0) {
       throw new Error('User not found')
@@ -155,75 +134,9 @@ export async function verifyRefreshToken(
       id: user.id,
       email: user.email,
       role: user.role,
-      isEmailVerified: user.is_verified,
     }
   } catch (error) {
     logger.error('Refresh token verification failed', error)
     throw new Error('Invalid refresh token')
-  }
-}
-
-/**
- * Verify email using the provided token.
- */
-export async function verifyEmail(token: string) {
-  if (!token || typeof token !== 'string') {
-    throw new Error('Verification token is required.');
-  }
-
-  const hashedToken = hashToken(token);
-
-  try {
-    const result = await db.begin(async (tx: any) => {
-      // Find the token
-      const tokens = await tx`
-        SELECT id, user_id, expires_at 
-        FROM email_verification_tokens 
-        WHERE token = ${hashedToken}
-      `
-
-      if (!tokens || tokens.length === 0) {
-        throw new Error('Invalid or expired verification token.');
-      }
-
-      const verificationToken = tokens[0]
-
-      // Check if token is expired
-      if (new Date() > new Date(verificationToken.expires_at)) {
-        // Clean up expired token
-        await tx`DELETE FROM email_verification_tokens WHERE id = ${verificationToken.id}`
-        throw new Error('Invalid or expired verification token.');
-      }
-
-      // Update user's verification status
-      const updatedUsers = await tx`
-        UPDATE users 
-        SET is_verified = true, updated_at = NOW()
-        WHERE id = ${verificationToken.user_id}
-        RETURNING id, email
-      `
-      
-      if (!updatedUsers || updatedUsers.length === 0) {
-        // This should not happen if the foreign key is set up correctly
-        throw new Error('Failed to find user for verification.');
-      }
-
-      // Delete the used token
-      await tx`DELETE FROM email_verification_tokens WHERE id = ${verificationToken.id}`
-
-      return updatedUsers[0];
-    });
-
-    logger.info(`Email verified for user: ${result.email}`);
-    return { success: true, message: 'Email verified successfully.' };
-
-  } catch (error) {
-    logger.error('Email verification failed', error);
-    // Re-throw specific, safe errors to the user
-    if (error instanceof Error && error.message.includes('token')) {
-      throw error;
-    }
-    // Generic error for other unexpected issues
-    throw new Error('Email verification failed. Please try again.');
   }
 }

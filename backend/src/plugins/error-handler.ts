@@ -77,8 +77,8 @@ export const errorHandler = new Elysia({ name: 'error-handler' }).onError(
         set.status = 500
         return {
           success: false,
-          error: 'Server Error',
-          message: errorMessage,
+          error: 'Internal Server Error',
+          message: 'An unexpected error occurred. Please try again later.',
         }
     }
   }

@@ -1,6 +1,7 @@
 import { db } from '@/db'
 import { PostingStatus, LoginMethod } from '@/types'
 import { logger } from '@/libs/logger'
+import { fetchOne, fetchMany, calculatePagination, parsePagination } from '@/libs/query-helpers'
 import { encryptCredentials } from '@/libs/crypto'
 import type { CreatePostingRequest, ListPostingsQuery } from './model'
 
@@ -37,51 +38,51 @@ async function validatePostingDetails(gameId: number, details: Record<string, an
 
 export async function createPosting(sellerId: number, data: CreatePostingRequest) {
   try {
-    const game = await db`
-      SELECT * FROM games
-      WHERE id = ${data.game_id}
-    `;
-    
-    if (!game || game.length === 0 || !game[0]!.is_active) {
-      throw new Error('Game not found or inactive.');
+    const game = await fetchOne(
+      db`SELECT * FROM games WHERE id = ${data.game_id}`,
+      'Game not found or inactive.',
+      'Failed to find game for posting'
+    ) as any
+
+    if (!game.is_active) {
+      throw new Error('Game not found or inactive.')
     }
 
-    await validatePostingDetails(data.game_id, data.field_values || {});
+    await validatePostingDetails(data.game_id, data.field_values || {})
 
-    const result = await db`
-      INSERT INTO game_accounts (
-        seller_id,
-        game_id,
-        account_identifier,
-        price,
-        description,
-        field_values,
-        cover_image_url,
-        status,
-        created_at,
-        updated_at
-      ) VALUES (
-        ${sellerId},
-        ${data.game_id},
-        ${data.account_identifier},
-        ${data.price},
-        ${data.description || null},
-        ${JSON.stringify(data.field_values || {})},
-        ${data.cover_image_url || null},
-        'active',
-        NOW(),
-        NOW()
-      )
-      RETURNING *
-    `;
+    const posting = await fetchOne(
+      db`
+        INSERT INTO game_accounts (
+          seller_id,
+          game_id,
+          account_identifier,
+          price,
+          description,
+          field_values,
+          cover_image_url,
+          status,
+          created_at,
+          updated_at
+        ) VALUES (
+          ${sellerId},
+          ${data.game_id},
+          ${data.account_identifier},
+          ${data.price},
+          ${data.description || null},
+          ${JSON.stringify(data.field_values || {})},
+          ${data.cover_image_url || null},
+          'active',
+          NOW(),
+          NOW()
+        )
+        RETURNING *
+      `,
+      'Failed to create posting.',
+      'Failed to insert posting'
+    ) as any
 
-    if (!result || result.length === 0) {
-      throw new Error('Failed to create posting.');
-    }
-
-    const newPosting = result[0]!;
-    logger.info(`New posting created: ${newPosting.id} by seller ${sellerId}`);
-    return newPosting;
+    logger.info(`New posting created: ${posting.id} by seller ${sellerId}`)
+    return posting
 
   } catch (error) {
     logger.error('Failed to create posting', error);
@@ -93,13 +94,12 @@ export async function createPosting(sellerId: number, data: CreatePostingRequest
 }
 
 export async function listPostings(query: ListPostingsQuery) {
-  const { page = 1, limit = 20, game_id, seller_id, minPrice, maxPrice, sortBy = 'newest', search } = query;
-  const offset = (page - 1) * limit;
+  const { page = 1, limit = 20, game_id, seller_id, minPrice, maxPrice, sortBy = 'newest', search } = query
+  const { offset } = parsePagination(page, limit)
 
   try {
-    // Build WHERE conditions with template literals
+    // Build WHERE conditions
     let whereConditions: any[] = [db`ga.status = 'active'`]
-    
     if (game_id) whereConditions.push(db`ga.game_id = ${game_id}`)
     if (seller_id) whereConditions.push(db`ga.seller_id = ${seller_id}`)
     if (minPrice) whereConditions.push(db`ga.price >= ${minPrice}`)
@@ -118,50 +118,55 @@ export async function listPostings(query: ListPostingsQuery) {
     else if (sortBy === 'price_desc') orderBy = 'ga.price DESC'
     else if (sortBy === 'oldest') orderBy = 'ga.created_at ASC'
 
-    const postings = await db`
-      SELECT
-        ga.id,
-        ga.account_identifier,
-        ga.price,
-        ga.description,
-        ga.field_values,
-        ga.cover_image_url,
-        ga.status,
-        ga.created_at,
-        g.name as game_name,
-        u.username as seller_username,
-        u.id as seller_id,
-        up.full_name as seller_full_name,
-        up.avatar_url as seller_avatar_url,
-        ss.average_rating as seller_rating
-      FROM game_accounts ga
-      LEFT JOIN games g ON ga.game_id = g.id
-      LEFT JOIN users u ON ga.seller_id = u.id
-      LEFT JOIN user_profiles up ON u.id = up.user_id
-      LEFT JOIN seller_stats ss ON u.id = ss.user_id
-      WHERE ${whereClause}
-      ORDER BY ${db.unsafe(orderBy)}
-      LIMIT ${limit} OFFSET ${offset}
-    `
+    const postings = await fetchMany(
+      db.unsafe(`
+        SELECT
+          ga.id,
+          ga.account_identifier,
+          ga.price,
+          ga.description,
+          ga.field_values,
+          ga.cover_image_url,
+          ga.status,
+          ga.created_at,
+          g.name as game_name,
+          u.username as seller_username,
+          u.id as seller_id,
+          up.full_name as seller_full_name,
+          up.avatar_url as seller_avatar_url,
+          ss.average_rating as seller_rating
+        FROM game_accounts ga
+        LEFT JOIN games g ON ga.game_id = g.id
+        LEFT JOIN users u ON ga.seller_id = u.id
+        LEFT JOIN user_profiles up ON u.id = up.user_id
+        LEFT JOIN seller_stats ss ON u.id = ss.user_id
+        WHERE ${whereClause}
+        ORDER BY ${orderBy}
+        LIMIT ${limit} OFFSET ${offset}
+      `) as any,
+      '',
+      true
+    ) as any[]
 
-    const countResult = await db`
-      SELECT COUNT(*) as total FROM game_accounts ga
-      WHERE ${whereClause}
-    `
+    const countResult = await fetchMany(
+      db.unsafe(`SELECT COUNT(*) as total FROM game_accounts ga WHERE ${whereClause}`) as any,
+      '',
+      false
+    ) as any[]
 
     const total = Number(countResult[0]?.total || 0)
-    const totalPages = Math.ceil(total / limit)
+    const { totalPages } = calculatePagination(page, limit, total)
 
     return {
       success: true,
-      data: postings as any[],
+      data: postings,
       pagination: {
         page,
         limit,
         total,
         totalPages,
-      }
-    };
+      },
+    }
 
   } catch (error) {
     logger.error('Failed to list postings', error);

@@ -3,6 +3,7 @@ import { registerAndLoginUser } from './utils'
 import { db } from '@/db'
 import { createId } from '@paralleldrive/cuid2'
 
+// @ts-ignore - Manual test file
 async function test() {
   await clearRateLimits()
   await clearDatabase()
@@ -19,7 +20,7 @@ async function test() {
   
   // Create posting as seller
   const postingData = {
-    game_id: gameData[0].id,
+    game_id: gameData[0]!.id,
     account_identifier: 'test-account',
     price: 125000,
     description: 'Test Account',

@@ -3,7 +3,7 @@ declare module 'bun' {
   interface Env {
     // App
     NODE_ENV: 'development' | 'production' | 'test'
-    PORT: string
+    PORT: number
     APP_URL: string
     FRONTEND_URL: string
     
@@ -28,10 +28,6 @@ declare module 'bun' {
     // Xendit
     XENDIT_SECRET_KEY: string
     XENDIT_WEBHOOK_TOKEN: string
-    
-    // KYC
-    KYC_API_KEY: string
-    KYC_API_URL: string
     
     // Image Upload
     MAX_IMAGE_SIZE: string

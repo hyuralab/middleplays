@@ -3,7 +3,8 @@ import { registerAndLoginUser } from './utils'
 import { db } from '@/db'
 import { createId } from '@paralleldrive/cuid2'
 
-async function test() {
+// @ts-ignore - Manual test file
+async function testPost() {
   await clearRateLimits()
   await clearDatabase()
   const app = getApp()
@@ -17,7 +18,7 @@ async function test() {
   `;
   
   const postingData = {
-    game_id: gameData[0].id,
+    game_id: gameData[0]!.id,
     account_identifier: 'test-account',
     price: 10000,
     description: 'Test posting',
@@ -42,4 +43,4 @@ async function test() {
   console.log('Response (first 300):', text.substring(0, 300))
 }
 
-test().catch(console.error).finally(() => process.exit(0))
+testPost().catch(console.error).finally(() => process.exit(0))

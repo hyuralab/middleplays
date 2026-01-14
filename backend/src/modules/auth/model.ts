@@ -2,36 +2,10 @@ import { Type, Static } from '@sinclair/typebox'
 
 // ==================== REQUEST SCHEMAS ====================
 
-export const registerRequestSchema = Type.Object({
-  email: Type.String({
-    format: 'email',
-    minLength: 5,
-    maxLength: 255,
-  }),
-  password: Type.String({
-    minLength: 8,
-    maxLength: 100,
-    // ✅ FIXED: Now enforces 8+ chars AND uppercase, lowercase, number
-    pattern: '^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d).{8,}$',
-    errorMessage: 'Password must be at least 8 characters with uppercase, lowercase, and number',
-  }),
-  fullName: Type.Optional(Type.String({
-    minLength: 2,
-    maxLength: 255,
-  })),
-  phone: Type.Optional(Type.String({
-    minLength: 10,
-    maxLength: 20,
-    pattern: '^[0-9+\\-\\s()]+$',
-  })),
-})
-
-export const loginRequestSchema = Type.Object({
-  email: Type.String({
-    format: 'email',
-  }),
-  password: Type.String({
+export const googleLoginRequestSchema = Type.Object({
+  googleToken: Type.String({
     minLength: 1,
+    description: 'Google OAuth ID token from frontend',
   }),
 })
 
@@ -41,48 +15,38 @@ export const refreshTokenRequestSchema = Type.Object({
   }),
 })
 
-export const verifyEmailRequestSchema = Type.Object({
-  token: Type.String({
-    minLength: 1,
-    description: 'The email verification token from the link.',
-  }),
-})
-
 // ==================== RESPONSE SCHEMAS ====================
 
-export const authResponseSchema = Type.Object({
+export const googleAuthResponseSchema = Type.Object({
   success: Type.Boolean(),
-  data: Type.Object({
+  data: Type.Optional(Type.Object({
     user: Type.Object({
       id: Type.String(),
       email: Type.String(),
+      name: Type.String(),
+      avatarUrl: Type.Optional(Type.String()),
       role: Type.String(),
-      isEmailVerified: Type.Boolean(),
     }),
     accessToken: Type.String(),
     refreshToken: Type.String(),
-  }),
+  })),
+  error: Type.Optional(Type.String()),
+  message: Type.Optional(Type.String()),
 })
 
 export const refreshTokenResponseSchema = Type.Object({
   success: Type.Boolean(),
-  data: Type.Object({
+  data: Type.Optional(Type.Object({
     accessToken: Type.String(),
-  }),
-})
-
-export const verifyEmailResponseSchema = Type.Object({
-  success: Type.Boolean(),
-  message: Type.String(),
+  })),
+  error: Type.Optional(Type.String()),
+  message: Type.Optional(Type.String()),
 })
 
 // ==================== TYPES ====================
 
-export type RegisterRequest = Static<typeof registerRequestSchema>
-export type LoginRequest = Static<typeof loginRequestSchema>
+export type GoogleLoginRequest = Static<typeof googleLoginRequestSchema>
 export type RefreshTokenRequest = Static<typeof refreshTokenRequestSchema>
-export type VerifyEmailRequest = Static<typeof verifyEmailRequestSchema>
 
-export type AuthResponse = Static<typeof authResponseSchema>
+export type GoogleAuthResponse = Static<typeof googleAuthResponseSchema>
 export type RefreshTokenResponse = Static<typeof refreshTokenResponseSchema>
-export type VerifyEmailResponse = Static<typeof verifyEmailResponseSchema>

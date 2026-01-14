@@ -16,6 +16,8 @@ export const autoExpireQueue = new Queue('auto-expire', { connection: bullRedis 
 export const autoCompleteQueue = new Queue('auto-complete', { connection: bullRedis as any })
 export const disbursementQueue = new Queue('disbursement', { connection: bullRedis as any })
 export const notificationQueue = new Queue('send-notification', { connection: bullRedis as any })
+export const autoResolveDisputesQueue = new Queue('auto-resolve-disputes', { connection: bullRedis as any })
+export const deleteExpiredCredentialsQueue = new Queue('delete-expired-credentials', { connection: bullRedis as any })
 
 logger.info('BullMQ queues initialized')
 

@@ -74,9 +74,11 @@ export enum TrustLevel {
 export interface User {
   id: string
   email: string
-  password_hash: string
+  google_id: string // Unique Google OAuth identifier
+  google_name: string | null // User's name from Google
+  google_avatar_url: string | null // User's avatar from Google
+  username: string
   role: UserRole
-  is_verified: boolean
   login_method: LoginMethod
   created_at: Date
   updated_at: Date
@@ -92,14 +94,6 @@ export interface UserProfile {
   country: string | null
   created_at: Date
   updated_at: Date
-}
-
-export interface EmailVerificationToken {
-  id: string
-  user_id: string
-  token_hash: string
-  expires_at: Date
-  created_at: Date
 }
 
 export interface SellerStats {

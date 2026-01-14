@@ -2,20 +2,23 @@ import { Job } from 'bullmq'
 import { logger } from '@/libs/logger'
 
 /**
- * Send push/email notifications to users
+ * Process notification job
+ * Currently logs notifications only (in-app only, no email)
  */
 export async function processSendNotification(job: Job) {
   try {
-    const { userId, type, message, data } = job.data
-    logger.info('Processing notification', { jobId: job.id, userId, type })
+    const { notificationId, type } = job.data
 
-    // TODO: Integrate with push notification service (FCM, OneSignal, etc)
-    // For now, just log
-    logger.info(`Notification sent to user ${userId}: ${message}`)
+    logger.info(`[NOTIFICATION] Job ${job.id}: ${type} (notification: ${notificationId})`)
 
-    return { sent: true, userId, type }
+    return {
+      success: true,
+      notificationId,
+      type,
+      timestamp: new Date(),
+    }
   } catch (error) {
-    logger.error('Send notification job failed', error)
+    logger.error(`Notification job failed: ${job.id}`, error)
     throw error
   }
 }

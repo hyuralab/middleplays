@@ -23,16 +23,6 @@ export const updateProfileSchema = Type.Object({
   phone: Type.Optional(Type.String({ minLength: 10, maxLength: 20, pattern: '^[0-9+\\-\\s()]+$' })),
 })
 
-export const changePasswordSchema = Type.Object({
-  oldPassword: Type.String(),
-  newPassword: Type.String({
-    minLength: 8,
-    maxLength: 100,
-    pattern: '^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d).{8,}$',
-    errorMessage: 'Password must be at least 8 characters with uppercase, lowercase, and number',
-  }),
-})
-
 // ==================== RESPONSES ====================
 
 export const userProfileResponseSchema = Type.Object({
@@ -50,4 +40,3 @@ export const genericSuccessResponseSchema = Type.Object({
 
 export type UserProfileResponse = Static<typeof userProfileResponseSchema>
 export type UpdateProfileRequest = Static<typeof updateProfileSchema>
-export type ChangePasswordRequest = Static<typeof changePasswordSchema>

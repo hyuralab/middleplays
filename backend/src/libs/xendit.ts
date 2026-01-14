@@ -55,5 +55,5 @@ class MockXenditClient {
 }
 
 // Initialize the client. In a real app, use the actual Xendit library.
-// e.g., const xendit = new Xendit({ secretKey: env.XENDIT_API_KEY });
-export const xenditClient = new MockXenditClient(env.XENDIT_API_KEY || '');
+// e.g., const xendit = new Xendit({ secretKey: env.XENDIT_SECRET_KEY });
+export const xenditClient = new MockXenditClient(env.XENDIT_SECRET_KEY || '');

@@ -2,6 +2,7 @@ import { Elysia } from 'elysia'
 import { Type } from '@sinclair/typebox'
 import { requireVerifiedSeller, requireAuth } from '@/middlewares/auth'
 import { uploadImage, isValidImage } from '@/libs/image-upload'
+import { idempotencyPlugin, cacheIdempotentResponse } from '@/plugins/idempotency'
 import {
   createPostingSchema,
   createPostingResponseSchema,
@@ -18,7 +19,7 @@ const createPostingRoute = new Elysia()
   .use(requireVerifiedSeller)
   .post(
     '/',
-    async ({ isVerifiedSeller, sellerUser, body, set }) => {
+    async ({ isVerifiedSeller, sellerUser, body, set, idempotencyKey }: any) => {
       if (!isVerifiedSeller || !sellerUser) {
         set.status = 403
         throw new Error('Access denied. Verified seller account required.')
@@ -57,13 +58,16 @@ const createPostingRoute = new Elysia()
 
       const newPosting = await createPosting(sellerUser.id, postingData)
       set.status = 201
-      return {
+      const response = {
         success: true,
         data: {
           id: (newPosting as any).id,
           cover_image_url: coverImageUrl,
         },
       }
+      // Cache for idempotency - prevent duplicate listings on retry
+      await cacheIdempotentResponse(idempotencyKey, 201, response)
+      return response
     },
     {
       // Accept both form data and JSON
@@ -85,6 +89,7 @@ const createPostingRoute = new Elysia()
   )
 
 export const postingsModule = new Elysia({ prefix: '/postings', name: 'postings-module' })
+  .use(idempotencyPlugin)
   // Define protected routes first in sub-module
   .use(createPostingRoute)
   

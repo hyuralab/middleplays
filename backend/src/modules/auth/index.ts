@@ -3,99 +3,37 @@ import { jwtPlugin } from '@/plugins/jwt'
 import { rateLimitPlugin } from '@/plugins/rate-limit'
 import { logger } from '@/libs/logger'
 import {
-  registerRequestSchema,
-  loginRequestSchema,
+  googleLoginRequestSchema,
   refreshTokenRequestSchema,
-  verifyEmailRequestSchema,
-  authResponseSchema,
+  googleAuthResponseSchema,
   refreshTokenResponseSchema,
-  verifyEmailResponseSchema,
 } from './model'
-import { registerUser, loginUser, verifyRefreshToken, verifyEmail } from './service'
+import { googleLoginUser, verifyRefreshToken } from './service'
 
 export const authModule = new Elysia({ prefix: '/auth', name: 'auth' })
   .use(jwtPlugin)
   .use(rateLimitPlugin)
 
-  // ==================== REGISTER ====================
+  // ==================== GOOGLE LOGIN ====================
   .post(
-    '/register',
+    '/google-login',
     async ({ body, jwt, jwtRefresh, checkRateLimit, request, set }) => {
       try {
-        // Rate limiting for registration
+        // Rate limiting for Google login
         const ip = request.headers.get('x-forwarded-for') || 'unknown'
-        await checkRateLimit(`register:${ip}`, {
-          max: 5, // 5 registrations
-          window: 3600, // per hour
-        })
-
-        // Register user
-        const user = await registerUser(body)
-
-        // Generate tokens
-        const accessToken = await jwt.sign({ userId: user.id, type: 'access' })
-        const refreshToken = await jwtRefresh.sign({ userId: user.id, type: 'refresh' })
-
-        logger.info(`User registered successfully: ${user.email}`)
-
-        return {
-          success: true,
-          data: {
-            user: {
-              id: user.id,
-              email: user.email,
-              role: user.role,
-              isEmailVerified: user.isEmailVerified,
-            },
-            accessToken,
-            refreshToken,
-          },
-        }
-      } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : String(error)
-        
-        if (errorMessage.includes('Email already registered')) {
-          set.status = 400
-          return {
-            success: false,
-            error: 'Bad Request',
-            message: 'Email already registered',
-          }
-        }
-        
-        throw error
-      }
-    },
-    {
-      body: registerRequestSchema,
-      detail: {
-        tags: ['Auth'],
-        summary: 'Register new user',
-        description: 'Create a new user account with email and password',
-      },
-    }
-  )
-
-  // ==================== LOGIN ====================
-  .post(
-    '/login',
-    async ({ body, jwt, jwtRefresh, checkRateLimit, request, set }) => {
-      try {
-        // Rate limiting for login
-        const ip = request.headers.get('x-forwarded-for') || 'unknown'
-        await checkRateLimit(`login:${body.email}`, {
-          max: 5, // 5 login attempts
+        await checkRateLimit(`google-login:${ip}`, {
+          max: 10, // 10 login attempts
           window: 900, // per 15 minutes
         })
 
-        // Login user
-        const user = await loginUser(body)
+        // Google login with auto-user-creation
+        const user = await googleLoginUser(body.googleToken)
 
         // Generate tokens
         const accessToken = await jwt.sign({ userId: user.id, type: 'access' })
         const refreshToken = await jwtRefresh.sign({ userId: user.id, type: 'refresh' })
 
-        logger.info(`User logged in successfully: ${user.email}`)
+        logger.info(`User logged in with Google: ${user.email}`)
 
         return {
           success: true,
@@ -103,8 +41,9 @@ export const authModule = new Elysia({ prefix: '/auth', name: 'auth' })
             user: {
               id: user.id,
               email: user.email,
+              name: user.name,
+              avatarUrl: user.avatarUrl,
               role: user.role,
-              isEmailVerified: user.isEmailVerified,
             },
             accessToken,
             refreshToken,
@@ -112,25 +51,27 @@ export const authModule = new Elysia({ prefix: '/auth', name: 'auth' })
         }
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error)
-        
-        if (errorMessage.includes('Invalid email or password')) {
-          set.status = 400
+
+        if (errorMessage.includes('Invalid Google token')) {
+          set.status = 401
           return {
             success: false,
-            error: 'Bad Request',
-            message: 'Invalid email or password',
+            error: 'Unauthorized',
+            message: 'Invalid or expired Google token',
           }
         }
-        
+
+        logger.error('Google login error', error)
         throw error
       }
     },
     {
-      body: loginRequestSchema,
+      body: googleLoginRequestSchema,
+      response: googleAuthResponseSchema,
       detail: {
         tags: ['Auth'],
-        summary: 'Login user',
-        description: 'Authenticate user with email and password',
+        summary: 'Login with Google OAuth',
+        description: 'Authenticate with Google OAuth token. Auto-creates user on first login.',
       },
     }
   )
@@ -156,34 +97,11 @@ export const authModule = new Elysia({ prefix: '/auth', name: 'auth' })
     },
     {
       body: refreshTokenRequestSchema,
+      response: refreshTokenResponseSchema,
       detail: {
         tags: ['Auth'],
         summary: 'Refresh access token',
         description: 'Get new access token using refresh token',
-      },
-    }
-  )
-
-  // ==================== VERIFY EMAIL ====================
-  .get(
-    '/verify-email',
-    async ({ query }) => {
-      const result = await verifyEmail(query.token)
-
-      // In a real frontend, you would redirect to a "success" page.
-      // For an API, returning a success message is appropriate.
-      return {
-        success: result.success,
-        message: result.message,
-      }
-    },
-    {
-      query: verifyEmailRequestSchema,
-      response: verifyEmailResponseSchema,
-      detail: {
-        tags: ['Auth'],
-        summary: 'Verify email',
-        description: 'Verify user email with a token sent to their inbox.',
       },
     }
   )

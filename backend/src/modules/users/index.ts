@@ -3,13 +3,11 @@ import { requireAuth } from '@/middlewares/auth'
 import {
   userProfileResponseSchema,
   updateProfileSchema,
-  changePasswordSchema,
   genericSuccessResponseSchema,
 } from './model'
 import {
   getUserProfile,
   updateUserProfile,
-  changeUserPassword
 } from './service'
 
 export const usersModule = new Elysia({ prefix: '/users', name: 'users-module' })
@@ -55,7 +53,7 @@ export const usersModule = new Elysia({ prefix: '/users', name: 'users-module' }
   .put(
     '/me',
     async ({ userId, body, set }) => {
-      await updateUserProfile(userId!, body);
+      await updateUserProfile(Number(userId!), body);
       set.status = 200;
       return {
         success: true,
@@ -68,27 +66,6 @@ export const usersModule = new Elysia({ prefix: '/users', name: 'users-module' }
       detail: {
         tags: ['Users'],
         summary: "Update the current user's profile",
-      },
-    }
-  )
-
-  // ==================== CHANGE PASSWORD ====================
-  .put(
-    '/me/password',
-    async ({ userId, body, set }) => {
-      await changeUserPassword(userId!, body);
-      set.status = 200;
-      return {
-        success: true,
-        message: 'Password changed successfully.',
-      }
-    },
-    {
-      body: changePasswordSchema,
-      response: genericSuccessResponseSchema,
-      detail: {
-        tags: ['Users'],
-        summary: 'Change the current user a password',
       },
     }
   )

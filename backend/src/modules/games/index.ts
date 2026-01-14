@@ -1,13 +1,6 @@
 import { Elysia } from 'elysia'
-import {
-  listGamesResponseSchema,
-  listGameFieldsResponseSchema,
-  gameParamsSchema,
-} from './model'
-import {
-  listActiveGames,
-  getGameFields
-} from './service'
+import { listActiveGames, getGameFields } from './service'
+import { successResponse, handleRoute, logSuccess } from '@/libs/route-helpers'
 
 export const gamesModule = new Elysia({ prefix: '/games', name: 'games-module' })
   // This module is public, no authentication needed.
@@ -15,19 +8,15 @@ export const gamesModule = new Elysia({ prefix: '/games', name: 'games-module' }
   // ==================== LIST ALL ACTIVE GAMES ====================
   .get(
     '/',
-    async ({ set }) => {
-      const games = await listActiveGames();
-      set.status = 200;
-      return {
-        success: true,
-        data: games,
-      }
-    },
+    handleRoute(async () => {
+      const games = await listActiveGames()
+      logSuccess('Fetched active games', { count: games.length })
+      return successResponse(games)
+    }),
     {
-      response: listGamesResponseSchema,
       detail: {
         tags: ['Games'],
-        summary: "Get a list of all active games",
+        summary: 'Get a list of all active games',
       },
     }
   )
@@ -35,20 +24,16 @@ export const gamesModule = new Elysia({ prefix: '/games', name: 'games-module' }
   // ==================== GET GAME-SPECIFIC FIELDS ====================
   .get(
     '/:gameId/fields',
-    async ({ params, set }) => {
-      const fields = await getGameFields(params.gameId);
-      set.status = 200;
-      return {
-        success: true,
-        data: fields,
-      }
-    },
+    handleRoute(async (context: any) => {
+      const gameId = Number(context.params.gameId)
+      const fields = await getGameFields(gameId)
+      logSuccess('Fetched game fields', { gameId, fieldCount: fields.length })
+      return successResponse(fields)
+    }),
     {
-      params: gameParamsSchema,
-      response: listGameFieldsResponseSchema,
       detail: {
         tags: ['Games'],
-        summary: "Get the dynamic field definitions for a specific game",
+        summary: 'Get the dynamic field definitions for a specific game',
       },
     }
   )

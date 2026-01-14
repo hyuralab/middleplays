@@ -1,7 +1,7 @@
 export const env = {
   // App
   NODE_ENV: (process.env.NODE_ENV || 'development') as 'development' | 'production' | 'test',
-  PORT: parseInt(process.env.PORT || '3000'),
+  PORT: parseInt((process.env.PORT ?? '3000') as unknown as string, 10),
   APP_URL: process.env.APP_URL || 'http://localhost:3000',
   FRONTEND_URL: process.env.FRONTEND_URL || 'http://localhost:5173',
   
@@ -27,9 +27,10 @@ export const env = {
   XENDIT_SECRET_KEY: process.env.XENDIT_SECRET_KEY || '',
   XENDIT_WEBHOOK_TOKEN: process.env.XENDIT_WEBHOOK_TOKEN || '',
   
-  // KYC
-  KYC_API_KEY: process.env.KYC_API_KEY || '',
-  KYC_API_URL: process.env.KYC_API_URL || '',
+  // Google OAuth
+  GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID || 'PLACEHOLDER_GOOGLE_CLIENT_ID',
+  GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET || 'PLACEHOLDER_GOOGLE_CLIENT_SECRET',
+  GOOGLE_REDIRECT_URI: process.env.GOOGLE_REDIRECT_URI || `http://localhost:5173/auth/callback`,
   
   // Image Upload
   MAX_IMAGE_SIZE: parseInt(process.env.MAX_IMAGE_SIZE || '5242880'),

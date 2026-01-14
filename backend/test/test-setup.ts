@@ -29,10 +29,10 @@ export async function clearRateLimits() {
 export async function clearDatabase() {
   try {
     // Truncate all tables in correct order (respecting foreign keys)
-    await db`TRUNCATE TABLE review_responses, review_photos, reviews, favorites, notifications CASCADE`
-    await db`TRUNCATE TABLE disputes, transactions CASCADE`
-    await db`TRUNCATE TABLE game_accounts, game_field_definitions, games CASCADE`
-    await db`TRUNCATE TABLE seller_stats, email_verification_tokens, user_profiles, users CASCADE`
+    await db`TRUNCATE TABLE reviews, favorites, notifications CASCADE`
+    await db`TRUNCATE TABLE credential_access, disputes, transactions CASCADE`
+    await db`TRUNCATE TABLE game_accounts, games CASCADE`
+    await db`TRUNCATE TABLE email_verification_tokens, user_profiles, users CASCADE`
   } catch (error) {
     logger.warn('Failed to clear database', error)
   }

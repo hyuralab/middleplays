@@ -1,8 +1,7 @@
 import { db } from '@/db'
 import { UserRole } from '@/types'
 import { logger } from '@/libs/logger'
-import { verifyPassword, hashPassword } from '@/libs/crypto'
-import type { UpdateProfileRequest, ChangePasswordRequest } from './model'
+import type { UpdateProfileRequest } from './model'
 
 /**
  * Get a user's full profile information.
@@ -82,55 +81,5 @@ export async function updateUserProfile(userId: number, data: UpdateProfileReque
   }
 }
 
-/**
- * Change a user's password.
- * @param userId - The ID of the user.
- * @param data - The old and new password data.
- */
-export async function changeUserPassword(userId: string, data: ChangePasswordRequest) {
-  const users = await db`
-    SELECT id, password_hash FROM users WHERE id = ${userId}
-  ` as any
-
-  if (!users || users.length === 0) {
-    // This should ideally not happen if the user is authenticated
-    throw new Error('User not found')
-  }
-
-  const user = users[0]
-
-  // 1. Verify the old password
-  const isOldPasswordValid = await verifyPassword(data.oldPassword, user.password_hash)
-  if (!isOldPasswordValid) {
-    throw new Error('Invalid old password.')
-  }
-
-  // 2. Hash the new password
-  const newPasswordHash = await hashPassword(data.newPassword)
-
-  // 3. Update the user's password in the database
-  try {
-    await db`
-      UPDATE users 
-      SET password_hash = ${newPasswordHash}, updated_at = NOW() 
-      WHERE id = ${userId}
-    `
-    
-    logger.info(`Password changed successfully for user: ${userId}`)
-
-    // In a real application, you might want to send a notification email here.
-    logger.info(`
-      ================================================
-      VIRTUAL EMAIL - PASSWORD CHANGE NOTIFICATION
-      ------------------------------------------------
-      To: ${user.email}
-      Your password has been changed successfully.
-      If you did not make this change, please contact support immediately.
-      ================================================
-    `);
-
-  } catch (error) {
-    logger.error(`Failed to change password for user ${userId}`, error);
-    throw new Error('Failed to change password.');
-  }
-}
+// Note: Change password functionality removed - Google OAuth doesn't support password changes.
+// If needed in future, users would re-authenticate with Google.

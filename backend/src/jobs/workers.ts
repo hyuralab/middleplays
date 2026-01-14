@@ -5,6 +5,8 @@ import { processAutoExpire } from './jobs/auto-expire'
 import { processAutoComplete } from './jobs/auto-complete'
 import { processDisbursement } from './jobs/disbursement'
 import { processSendNotification } from './jobs/send-notification'
+import { autoResolveDisputesJob } from './jobs/auto-resolve-disputes'
+import { processDeleteExpiredCredentials } from './jobs/delete-expired-credentials'
 
 // Create separate Redis connection for BullMQ workers
 const bullRedis = new Redis({
@@ -36,8 +38,18 @@ export const notificationWorker = new Worker('send-notification', processSendNot
   concurrency: 10,
 })
 
+export const autoResolveDisputesWorker = new Worker('auto-resolve-disputes', autoResolveDisputesJob, {
+  connection: bullRedis as any,
+  concurrency: 1,
+})
+
+export const deleteExpiredCredentialsWorker = new Worker('delete-expired-credentials', processDeleteExpiredCredentials, {
+  connection: bullRedis as any,
+  concurrency: 1,
+})
+
 // Attach event handlers
-;[autoExpireWorker, autoCompleteWorker, disbursementWorker, notificationWorker].forEach((worker) => {
+;[autoExpireWorker, autoCompleteWorker, disbursementWorker, notificationWorker, autoResolveDisputesWorker, deleteExpiredCredentialsWorker].forEach((worker) => {
   worker.on('completed', (job) => {
     logger.info(`Job ${job.id} completed in queue ${job.queueName}`)
   })
